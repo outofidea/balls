@@ -3,9 +3,29 @@ use rand::Rng;
 use rapier2d::math::Vector;
 use rapier2d::prelude::*;
 use raylib::prelude::*;
+use std::collections::VecDeque;
 use std::time::Duration;
 use std::{f32, thread};
 fn main() {
+    let balls_num = 5000;
+    let buffering_length = if balls_num >= 1000 { balls_num / 40 } else { 5 };
+
+    #[derive(Clone, Copy, Debug)]
+    struct Data {
+        x: f32,
+        y: f32,
+        vel: f32,
+        ang: f32,
+    }
+
+    struct Frame {
+        frame: Vec<Data>,
+    }
+
+    let mut frames_buffer: VecDeque<Frame> = VecDeque::new();
+
+    let mut prev_frame_data: Vec<Data> = vec![];
+
     let (rapier_to_main, main_from_rapier) = bounded(100);
     // let (tx, rx) = mpsc::channel();
     // let (main_to_rapier, rapier_from_main) = (rapier_to_main.clone(), main_from_rapier.clone());
@@ -15,9 +35,6 @@ fn main() {
         .msaa_4x()
         .build();
     rl.set_target_fps(60);
-
-
-    let balls_num = 500;
 
     let screen_dims: (i32, i32) = (rl.get_screen_width(), rl.get_screen_height());
     println!("screen dims: {:#?}", screen_dims);
@@ -49,8 +66,8 @@ fn main() {
 
     let mut ball_body_handles: Vec<RigidBodyHandle> = Vec::new();
     for _ in 0..balls_num {
-        let x = rand::thread_rng().gen_range(50..90);
-        let y = rand::thread_rng().gen_range(50..90);
+        let x = rand::thread_rng().gen_range(10..100);
+        let y = rand::thread_rng().gen_range(10..100);
         // let x = 45;
         // let y = 45;
         let velx = rand::thread_rng().gen_range(90..100);
@@ -62,13 +79,13 @@ fn main() {
             .linvel(Vector::new(velx as f32, vely as f32))
             .build();
         let ball_body_handle = rigid_body_set.insert(rigid_body);
-        let collider = ColliderBuilder::cuboid(0.5, 0.5).restitution(0.4).build();
+        let collider = ColliderBuilder::ball(0.5).restitution(0.4).build();
         ball_body_handles.push(ball_body_handle);
         collider_set.insert_with_parent(collider, ball_body_handle, &mut rigid_body_set);
     }
 
     /* Create other structures necessary for the simulation. */
-    let gravity = vector![0.0, -25.0];
+    let gravity = vector![0.0, -50.0];
     let integration_parameters = IntegrationParameters::default();
     let mut physics_pipeline = PhysicsPipeline::new();
     let mut island_manager = IslandManager::new();
@@ -102,24 +119,24 @@ fn main() {
                 &event_handler,
             );
 
-            
-
-            let mut results: Vec<(f32, f32, f32, f32)> =Vec::new();
+            let mut results: Vec<Data> = Vec::new();
 
             for balls in &ball_body_handles {
                 let currball = &rigid_body_set[*balls];
-                results.push((
-                    (currball.translation().x * 10.0),
-                    (currball.translation().y * 10.0),
-                    currball.linvel().abs().magnitude().clamp(0.0, 255.0),
-                    currball.rotation().re,
-                ));
+                results.push(Data {
+                    x: (currball.translation().x * 10.0),
+                    y: (currball.translation().y * 10.0),
+                    vel: currball.linvel().abs().magnitude().clamp(0.0, 255.0),
+                    ang: currball.rotation().re,
+                });
             }
 
-            let send = rapier_to_main.send(results);
+            let frame = Frame { frame: results };
+
+            let send = rapier_to_main.send(frame);
 
             match send {
-                Ok(_) => println!("RAPIER: sent results!"),
+                Ok(_) => (),
                 Err(err) => println!("RAPIER: error sending results {}", err),
             }
 
@@ -138,7 +155,7 @@ fn main() {
             //     }
             //     Err(err) => (),
             // }
-            println!("sleeping");
+
             thread::sleep(Duration::from_millis(1));
         }
     });
@@ -161,24 +178,99 @@ fn main() {
         // }
         match main_from_rapier.try_recv() {
             Ok(recv_msg) => {
-                d.clear_background(Color::BLACK);
-                println!("recved: {:#?}", recv_msg);
-                for (x, y, eng, ang) in recv_msg {
-                    d.draw_circle(
-                        d.get_screen_width() - x as i32,
-                        d.get_screen_height() - y as i32,
-                        5.0,
-                        Color::new((eng + 100.0) as u8, (255.0 - eng) as u8, 0, 255),
+                frames_buffer.push_back(recv_msg);
+                if frames_buffer.len() >= buffering_length {
+                    d.clear_background(Color::BLACK);
+                    let frame_data = match frames_buffer.pop_front() {
+                        None => panic!("wtff?"),
+                        Some(curr_frame) => curr_frame.frame,
+                    };
+                    for data in frame_data {
+                        d.draw_circle(
+                            d.get_screen_width() - data.x as i32,
+                            d.get_screen_height() - data.y as i32,
+                            5.0,
+                            Color::new((data.vel + 100.0) as u8, (255.0 - data.vel) as u8, 0, 255),
+                        );
+                        d.draw_fps(700, 30);
+                        d.draw_text(
+                            format!("buffer length: {}", frames_buffer.len()).as_str(),
+                            700,
+                            60,
+                            25,
+                            Color::RED,
+                        );
+                    }
+                } else {
+                    d.clear_background(Color::BLACK);
+                    d.draw_text("Buffering (Startup?)", 100, 60, 25, Color::RED);
+                    d.draw_fps(700, 30);
+                    d.draw_text(
+                        format!("buffer length: {}", frames_buffer.len()).as_str(),
+                        700,
+                        60,
+                        25,
+                        Color::RED,
                     );
-                    d.draw_fps(0, 30)
                 }
             }
-            Err(err) => {
-                println!("RAYLIB: waiting for rapier data: {}", err);
-                d.draw_text("Rapier stall", 100, 30, 20, Color::RED);
-            }
-        };
+            Err(_) => {
+                if (frames_buffer.len() >= buffering_length - 1) & (frames_buffer.len() >= 1) {
+                    //if theres data in buffer
+                    d.clear_background(Color::BLACK);
+                    let frame_data = match frames_buffer.pop_front() {
+                        None => panic!("wtff?"),
+                        Some(curr_frame) => curr_frame.frame,
+                    };
+                    prev_frame_data.clone_from(&frame_data);
+                    for data in frame_data {
+                        d.draw_circle_lines(
+                            d.get_screen_width() - data.x as i32,
+                            d.get_screen_height() - data.y as i32,
+                            5.0,
+                            Color::new((data.vel + 100.0) as u8, (255.0 - data.vel) as u8, 0, 255),
+                        );
+                        d.draw_fps(700, 30);
+                        d.draw_text(
+                            format!("buffer length: {}", frames_buffer.len()).as_str(),
+                            700,
+                            60,
+                            25,
+                            Color::RED,
+                        );
+                    } //END if data is in buffer
+                } else {
+                    //if theres no data in buffer
+                    d.clear_background(Color::BLACK);
+                    // println!("RAYLIB: waiting for rapier data: {}", err);
+                    if !prev_frame_data.is_empty() {
+                        for data in &prev_frame_data {
+                            d.draw_circle_lines(
+                                d.get_screen_width() - data.x as i32,
+                                d.get_screen_height() - data.y as i32,
+                                5.0,
+                                Color::new(
+                                    (data.vel + 100.0) as u8,
+                                    (255.0 - data.vel) as u8,
+                                    0,
+                                    255,
+                                ),
+                            );
+                        }
+                    }
+                    d.draw_fps(700, 30);
+                    d.draw_text(
+                        format!("buffer length: {}", frames_buffer.len()).as_str(),
+                        700,
+                        60,
+                        25,
+                        Color::RED,
+                    );
+                    d.draw_text("Buffering (Startup?)", 100, 60, 25, Color::RED);
+                } //END if theres no data in buffer
 
-        thread::sleep(Duration::from_millis(10));
+                thread::sleep(Duration::from_millis(1));
+            }
+        }
     }
 }
