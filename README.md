@@ -6,4 +6,4 @@ run with gpu if possible
 
 pls dont roast me with this code
 
-![balls slapping intensifies](https://tenor.com/view/nice-balls-gang-gif-4370207098360551720)
+![balls slapping intensifies](/etc/ballsslap.gif)
