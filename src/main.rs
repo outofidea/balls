@@ -17,7 +17,7 @@ fn main() {
     rl.set_target_fps(60);
 
 
-
+    let balls_num = 500;
 
     let screen_dims: (i32, i32) = (rl.get_screen_width(), rl.get_screen_height());
     println!("screen dims: {:#?}", screen_dims);
@@ -48,7 +48,7 @@ fn main() {
     /* Create the bouncing ball. */
 
     let mut ball_body_handles: Vec<RigidBodyHandle> = Vec::new();
-    for _ in 0..500 {
+    for _ in 0..balls_num {
         let x = rand::thread_rng().gen_range(50..90);
         let y = rand::thread_rng().gen_range(50..90);
         // let x = 45;
@@ -174,7 +174,7 @@ fn main() {
                 }
             }
             Err(err) => {
-                // println!("RAYLIB: waiting for rapier data: {}", err);
+                println!("RAYLIB: waiting for rapier data: {}", err);
                 d.draw_text("Rapier stall", 100, 30, 20, Color::RED);
             }
         };
