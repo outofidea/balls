@@ -6,4 +6,4 @@ run with gpu if possible
 
 pls dont roast me with this code
 
-![balls slapping intensifies](/etc/ballsslap.gif)
+![balls slapping intensifies](/etc/ballsslaplowres.gif)
