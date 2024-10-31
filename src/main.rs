@@ -7,7 +7,7 @@ use std::collections::VecDeque;
 use std::time::Duration;
 use std::{f32, thread};
 fn main() {
-    let balls_num = 10000;
+    let balls_num = 1000;
     let buffering_length = 50;
 
     #[derive(Clone, Copy, Debug)]
