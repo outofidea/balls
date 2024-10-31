@@ -17,7 +17,7 @@ pls dont roast me with this code
 
 Step 1: Clone this repo 
 
-Step 2: Open folder in vscode or open in terminal 
+Step 2: Open folder in Visual Studio Code or in a terminal 
 
 Step 3: Type in terminal (cmd on windows):
 ```

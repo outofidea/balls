@@ -7,8 +7,8 @@ use std::collections::VecDeque;
 use std::time::Duration;
 use std::{f32, thread};
 fn main() {
-    let balls_num = 5000;
-    let buffering_length = if balls_num >= 1000 { balls_num / 40 } else { 5 };
+    let balls_num = 10000;
+    let buffering_length = 50;
 
     #[derive(Clone, Copy, Debug)]
     struct Data {
